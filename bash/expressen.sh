@@ -1,34 +1,43 @@
 # - - - - Description - - - -
-# script to get Chalmers expressen lunch
-# highlights 'Köttbullar'
+# outputs Chalmers expressen lunch in terminal, highlights 'Köttbullar'
+
+
+# - - - - How to install - - - -
+# $ chmod +x ./expressen.sh <# days from today>
+
 
 # - - - - How to run - - - -
-# execute command below to copy code into bash file:
-# $ sudo chmod +x my_script.sh && . expressen.sh <path to bash file>
+# $ ./expressen.sh <# days from today>
 
-# execute command below to call function
-# $ lunch <number of days from today>
 
-#path to bash
-local path=$1
 
-#get os
-local os=$OSTYPE
 
-#linux
-if [[ "$os" == "linux-gnu" ]]; then
-	sudo apt-get install jq
-#mac
-elif [[ "$os" == "darwin"* ]]; then
-	sudo brew install jq
+#get jq-filename
+jq=$(find . -maxdepth 1 -name "*jq*")
+
+#check if jq is downloaded
+if [ -z $jq ]; then
+	#get os
+	os=$OSTYPE
+
+	#linux
+	if [[ "$os" == "linux-gnu" ]]; then
+		wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+	#mac
+	elif [[ "$os" == "darwin"* ]]; then
+		wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
+	fi
+
+	#get jq-file
+	jq=$(find . -maxdepth 1 -name "*jq*")
+	sudo chmod +x ${jq:2}
 fi
 
-#copy code to bash file
-echo -e "\n\n" >> $path
-cat >> $path << 'EOF'
+
 #expressen data
+#optional: download jq library for linux/mac and replace ./jq-
 get_expressen_data() {
-	expressen_data=$(curl -s $url | jq '.[] | .startDate, .displayNames[0].dishDisplayName')
+	expressen_data=$(curl -s $url | $jq '.[] | .startDate, .displayNames[0].dishDisplayName')
 }
 
 #expressen api
@@ -98,11 +107,6 @@ fi
 done
 echo -e ""
 }
-EOF
 
-#reload bash
-if [[ "$os" == "linux-gnu" ]]; then
-	. $path
-elif [[ "$os" == "darwin"* ]]; then
-	. $path
-fi
+#executes function with input $1 as '# of days from today'
+lunch $1
