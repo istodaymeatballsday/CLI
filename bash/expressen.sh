@@ -1,17 +1,3 @@
-# - - - - Description - - - -
-# outputs Chalmers expressen lunch in terminal, highlights 'Köttbullar'
-
-
-# - - - - How to install - - - -
-# $ chmod +x ./expressen.sh <# days from today>
-
-
-# - - - - How to run - - - -
-# $ ./expressen.sh <# days from today>
-
-
-
-
 #get jq-filename
 jq=$(find . -maxdepth 1 -name "*jq*")
 
@@ -20,22 +6,24 @@ if [ -z $jq ]; then
 	#get os
 	os=$OSTYPE
 
+	echo "Downloading jq..."
+
 	#linux
-	if [[ "$os" == "linux-gnu" ]]; then
-		wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+	if [[ "$os" == "linux-gnu" ]]; then		
+		wget -q https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
 	#mac
 	elif [[ "$os" == "darwin"* ]]; then
-		wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
+		curl -o jq-osx-amd64 https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
 	fi
 
-	#get jq-file
+	#get and trim jq-filename
 	jq=$(find . -maxdepth 1 -name "*jq*")
 	sudo chmod +x ${jq:2}
 fi
 
 
 #expressen data
-#optional: download jq library for linux/mac and replace ./jq-
+#optional: download jq library for linux/mac and replace $jq with jq
 get_expressen_data() {
 	expressen_data=$(curl -s $url | $jq '.[] | .startDate, .displayNames[0].dishDisplayName')
 }
