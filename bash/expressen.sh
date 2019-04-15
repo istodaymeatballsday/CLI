@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # - - - - Description - - - -
 # outputs Chalmers expressen lunch in terminal, highlights 'Köttbullar'
 
@@ -9,17 +10,19 @@
 # - - - - How to run - - - -
 # $ ./expressen.sh <# days from today>
 
+# sets the current dir to the one the script in run in. This makes in path independent
+cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" > /dev/null && pwd )"
 
 #optional: download jq library for linux/mac and replace ./jq-
 get_expressen_data() {
-    # I cried when i wrote that awk
-    expressen_data=$(curl -s $url | python -mjson.tool | grep "dishDisplayName" | awk 'NR % 2 == 1' | awk -F '[(\")|\",]' '{ print $4 }' )
+    # idealy this script would be just inline text here
+    expressen_data=$(curl -s $url | python ../nice.py)
 }
 
 #expressen api
 expressen_api_url() {
     # why have api as a variable and not just a long string?
-    # i.e.  http://carbonateapiprod.azurewebsites.net/api/
+    # i.e.  http://carbonateapiprod.azurewebsites.net/api/v1/mealprovidingunits/3d519481-1667-4cad-d2a3-08d558129279/dishoccurrences
     local api='v1/mealprovidingunits/3d519481-1667-4cad-d2a3-08d558129279/dishoccurrences'
     url='http://carbonateapiprod.azurewebsites.net/api/'$api''
 }
@@ -66,33 +69,33 @@ lunch() {
     echo $data
     
     # #store data in array
-    # IFS=$'\n' read -r -a arr -d '' <<< "$data"
+    IFS=$'\n' read -r -a arr -d '' <<< "$data"
     
-    # local length=${#arr[@]}
-    # local temp=''
-    # #data is stored: [date, meat, veg, ...]
-    # for ((i=0; i<$length; i+=2))
-    # do
-    # 	#trim citation
-    # 	local date=${arr[i]:1:-1}
-    # 	local food=${arr[$((i+1))]:1:-1}
-    
-    # if [ "$date" != "null" ] && [ "$food" != "null" ]; then
-    # 	if [ "$date" != "$temp" ]; then
-    # 		echo -e "\n\e[1m\e[32m$(date --date "$date" +'%A')\e[0m:"
-    # 		temp=$date
-    # 	fi
-    
-    # 	#is it meatballs?
-    # 	is_it_meatballs "$food"
-    # 	index=$index
-    # 	if [[ ! -z "$index" ]]; then
-    # 		echo -e "\e[39m\e[5m${food:$index:10}\e[0m${food:10}"
-    # 	else
-    # 		echo -e "$food"
-    # 	fi
-    # fi
-    # done
+    local length=${#arr[@]}
+    local temp=''
+    #data is stored: [date, meat, veg, ...]
+    for ((i=0; i<$length; i+=2))
+    do
+        #trim citation
+        local date=${arr[i]:1:-1}
+        local food=${arr[$((i+1))]:1:-1}
+        
+        if [ "$date" != "null" ] && [ "$food" != "null" ]; then
+            if [ "$date" != "$temp" ]; then
+                echo -e "\n\e[1m\e[32m$(date --date "$date" +'%A')\e[0m:"
+                temp=$date
+            fi
+            
+            #is it meatballs?
+            is_it_meatballs "$food"
+            index=$index
+            if [[ ! -z "$index" ]]; then
+                echo -e "\e[39m\e[5m${food:$index:10}\e[0m${food:10}"
+            else
+                echo -e "$food"
+            fi
+        fi
+    done
     echo -e ""
 }
 
