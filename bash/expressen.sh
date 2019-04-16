@@ -1,4 +1,4 @@
-#get jq-filename
+#get jq filename
 jq=$(find . -maxdepth 1 -name "*jq*")
 
 #check if jq is downloaded
@@ -16,16 +16,26 @@ if [ -z $jq ]; then
 		curl -o jq-osx-amd64 https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
 	fi
 
-	#get and trim jq-filename
+	echo -e "\nDownload complete\n"
+
+	#get jq filename
 	jq=$(find . -maxdepth 1 -name "*jq*")
+
+	#trim jq filename and make file executable
 	sudo chmod +x ${jq:2}
 fi
 
 
-#expressen data
+#expressen data, standard lang: eng
 #optional: download jq library for linux/mac and replace $jq with jq
 get_expressen_data() {
-	expressen_data=$(curl -s $url | $jq '.[] | .startDate, .displayNames[0].dishDisplayName')
+	#get eng or swe menu
+	lang=1
+	if [ "$1" == "s" ]; then
+		lang=0
+	fi
+
+	expressen_data=$(curl -s $url | $jq '.[] | .startDate, .displayNames['$lang'].dishDisplayName')
 }
 
 #expressen api
@@ -34,31 +44,45 @@ expressen_api_url() {
 	url='http://carbonateapiprod.azurewebsites.net/api/'$api''
 }
 
-#return index if string contains 'KöTTBULLAR' 
+#return index if string contains 'MEATBALLS' or 'KöTTBULLAR' 
 is_it_meatballs() {
+	ingredient='MEATBALLS'
+	if [ "$2" == "s" ]; then
+		ingredient='KöTTBULLAR'
+	fi
+
 	local capital="$(echo "$1" | tr a-z A-Z)"
-	index="$(echo "$capital" | grep -b -o 'KöTTBULLAR' | awk 'BEGIN {FS=":"}{print $1}')"
+	index="$(echo "$capital" | grep -b -o "$ingredient" | awk 'BEGIN {FS=":"}{print $1}')"
 }
 
-#expressen menu
+#expressen menu 
+#$1: £days from today
+#$2: language swe/eng, default is swe
 lunch() {
-#check if input null or digit or negative
-if [ -z $1 ] || ! [[ "$1" =~ ^[0-9]+$ ]] || [ $1 -lt 0 ]; then
-	echo -e "\nInvalid input\n"
-	return 0
+#number of days from today
+local ndays=0
+
+#check if input null 
+if [ ! -z $1 ]; then
+	ndays=$1
+
+	#check if input digit or negative
+	if ! [[ "$1" =~ ^[0-9]*$ ]] || [ $1 -lt 0 ]; then
+		echo -e "\nInvalid input\n"
+		return 0
+	fi
+
 fi
 
 local today=$(date +'%Y-%m-%d')
-
-#number of days from today
-local end_date=$(date -d "$today+$1 days" +'%Y-%m-%d')
+local end_date=$(date -d "$today+$ndays days" +'%Y-%m-%d')
 
 #api
 expressen_api_url
 local url=''$url'?startDate='$today'&endDate='$end_date''
 
 #get data
-get_expressen_data "$1"
+get_expressen_data "$2"
 local data=$expressen_data
 if [ -z "$data" ]; then
 	echo -e "\nNo data\n"
@@ -70,7 +94,7 @@ IFS=$'\n' read -r -a arr -d '' <<< "$data"
 
 local length=${#arr[@]}
 local temp=''
-#data is stored: [date, meat, veg, ...]
+#data is stored: [date0, meat0, date0, veg0, date1, meat1, date1, veg1, ...]
 for ((i=0; i<$length; i+=2))
 do
 	#trim citation
@@ -79,15 +103,24 @@ do
 
 if [ "$date" != "null" ] && [ "$food" != "null" ]; then
 	if [ "$date" != "$temp" ]; then
-		echo -e "\n\e[1m\e[32m$(date --date "$date" +'%A')\e[0m:"
+		if [ "$2" == "s" ]; then
+			#swedish
+			echo -e "\n\e[1m\e[32m$(LC_TIME=sv_SE.utf-8 date --date "$date" +'%A')\e[0m:"
+		else
+			#english
+			echo -e "\n\e[1m\e[32m$(date --date "$date" +'%A')\e[0m:"
+		fi
+
 		temp=$date
 	fi
 
 	#is it meatballs?
-	is_it_meatballs "$food"
+	is_it_meatballs "$food" "$2"
 	index=$index
+	end="$(echo "$ingredient" | awk '{print length}')"
+	
 	if [[ ! -z "$index" ]]; then
-		echo -e "\e[39m\e[5m${food:$index:10}\e[0m${food:10}"
+		echo -e "\e[39m\e[5m${food:$index:$end}\e[0m${food:10}"
 	else
 		echo -e "$food"
 	fi
@@ -96,5 +129,8 @@ done
 echo -e ""
 }
 
-#executes function with input $1 as '# of days from today'
-lunch $1
+#executes function with input:
+# $1: '#days from today'
+# $2: 'language', e for english, s for swedish
+# default is 0 days and english
+lunch $1 $2
