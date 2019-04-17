@@ -2,7 +2,7 @@
 Outputs Chalmers expressen lunch in terminal & highlights "Meatballs" or "Köttbullar". 
 
 ### Linux > macOS
-Does NOT work for macOS ATM --> Use optional installation instead until further notice.
+Does NOT work for macOS ATM --> Try using optional installation instead until further notice.
 
 ## How to install
 ```
@@ -32,5 +32,5 @@ $ brew install jq
 ```
 $ sudo apt-get install jq
 ```
-1. Remove first 26 lines of code in [expressen.sh](expressen.sh) 
+1. Remove codeline 3-28 in [expressen.sh](expressen.sh) 
 2. Replace `$jq` with `jq` in `get_expressen_data()` function
