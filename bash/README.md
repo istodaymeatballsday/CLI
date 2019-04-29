@@ -1,15 +1,34 @@
 ## Description
 Outputs Chalmers expressen lunch in terminal & highlights "Meatballs" or "Köttbullar". 
 
-### Linux > macOS
-Does NOT work for macOS ATM --> Try using optional installation instead until further notice.
+<img src="expressen-GIF.gif" width="640">
 
-## How to install
+## Get jq
+Alt 1
+1. Install jq
 ```
-$ sudo chmod +x ./expressen.sh
+$ sudo apt-get install jq
 ```
+
+Alt 2
+1. Download jq
+```
+$ wget https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+```
+2. Make script executable
+```
+$ sudo chmod +x ./jq-linux64.sh 
+```
+3. Replace `jq` with `./jq-linux64` in `expressen_data()` function
+
 
 ## How to run
+1. Make script executable
+```
+$ sudo chmod +x ./expressen.sh 
+```
+
+2. Run script
 ```
 $ ./expressen.sh $1 $2
 ```
@@ -20,17 +39,4 @@ $ ./expressen.sh $1 $2
 - `$2` 
   - *optional*
   - language
-    - input `s` for swedish menu, default is english
-
-## Optional installation
-1. Download jq library for Linux/macOS:
-### macOS
-```
-$ brew install jq
-```
-### Linux
-```
-$ sudo apt-get install jq
-```
-1. Remove codeline 3-28 in [expressen.sh](expressen.sh) 
-2. Replace `$jq` with `jq` in `get_expressen_data()` function
+    - input `en` for English menu, default is Swedish
