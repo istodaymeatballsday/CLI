@@ -12,7 +12,7 @@ lunch menu in terminal & highlights *Köttbullar*
 
 ## Install
 ```
-$ curl "https://raw.githubusercontent.com/lasanjin/expressen-lunch-cli/master/expressen.py" | bash
+$ curl "https://raw.githubusercontent.com/istodaymeatballsday/CLI/master/install.sh" | bash
 ```
 
 ## How to run
