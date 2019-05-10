@@ -7,20 +7,17 @@ lunch() {
 	#number of days from today
 	local ndays=0
 
+	#set language
 	local lang='sv_SE.utf-8'
 	if equals $2 en; then
 		lang='en_US.utf8'
 	fi
 
-	#check if input null
 	if ! isempty $1; then
-
-		#check if input digit or negative
 		if ! isdigit $1 || isnegative $1; then
 			echo -e "\nInvalid input\n"
 			return 0
 		fi
-
 		ndays=$1
 	fi
 
@@ -32,7 +29,6 @@ lunch() {
 
 	#get data
 	expressen_data $2
-
 	if isempty $rawdata; then
 		echo -e "\nNo data\n"
 		return 0
@@ -41,55 +37,34 @@ lunch() {
 	#store data in array
 	toarray
 
+	#map food to formatd dates in order to sort by date
+	declare -A local newdata
+	format
+
+	#sort data because of shitty json
+	IFS=';'
+	read -r -a sorted -d '' <<<"$(
+		for key in "${!newdata[@]}"; do
+			printf "%s\n" "$key ${newdata[$key]}"
+		done | sort -k1
+	)"
+	unset IFS
+
 	#init colors etc.
 	style
 
-	declare local index
-	declare local end
-	declare local tempdate
-	local length=${#data[@]}
-
-	#data is stored: [date0, meat0, date0, veg0, date1, meat1, date1, veg1, ...]
-	#+ because of shitty json
-	for ((i = 0; i < $length; i += 2)); do
-
-		local date=${data[i]}
-		local food=${data[$((i + 1))]}
-
-		if isvalid "$date" "$food"; then
-			if ! equals "$date" "$tempdate"; then
-
-				day=$(LC_TIME=$lang date --date "$date" +'%a')
-				echo -e "\n${bold}${green}${day}${default}"
-
-				tempdate=$date
-			fi
-
-			is_it_meatballs $2
-			if ! isempty $index; then
-
-				end="$(echo $ingredient | awk '{print length}')"
-				echo -e "${blink}${bold}${orange}${food:$index:$end}${default}${food:$end}"
-			else
-				echo -e "$food"
-			fi
-		fi
-	done
-
-	echo -e ""
+	#print data
+	print $2 $3
 }
 
-#expressen data, default language: SV
 expressen_data() {
-	#get SV or EN menu
+	#0 is Swedish menu
 	local arg=0
 	if equals $1 en; then
 		arg=1
 	fi
 
-	#sort because of shitty json
-	rawdata=$(curl -s $url | jq -r 'sort_by(.startDate) |
-	 (.[] | .startDate, .displayNames['$arg'].dishDisplayName)')
+	rawdata=$(curl -s $url | jq -r '.[] | .startDate, .displayNames['$arg'].dishDisplayName')
 }
 
 #expressen api
@@ -99,20 +74,8 @@ expressen_url() {
 	echo ''$hostname''$api'?startDate='$today'&endDate='$todate''
 }
 
-#return index if string contains 'MEATBALLS' or 'KöTTBULLAR'
-is_it_meatballs() {
-
-	ingredient='KöTTBULLAR'
-	if equals $1 en; then
-		ingredient='MEATBALLS'
-	fi
-
-	local capital="$(echo $food | tr a-z A-Z)"
-	index="$(echo $capital | grep -b -o $ingredient | awk 'BEGIN {FS=":"}{print $1}')"
-}
-
-#date is stored as '4/23/2019 12:00:00 AM' in shitty json,
-#+ which is a not valid format
+#date is stored as '4/23/2019 12:00:00 AM', which is a not valid format
+#+ makes it tricky to read data into array
 toarray() {
 	#IFS (internal field separator) variable is used to determine what characters
 	#+ bash defines as words boundaries when processing character strings.
@@ -123,6 +86,73 @@ toarray() {
 
 	#reset back to default value
 	unset IFS
+}
+
+format() {
+	local -r dateformat='+%Y-%m-%d'
+	local length=${#data[@]}
+	for ((i = 0; i < $length; i += 2)); do
+
+		local date=${data[i]}
+		local dish=${data[$((i + 1))]}
+		local formated=$(date --date "$date" $dateformat)
+		local prev=${newdata[$formated]}
+
+		#store dates as keys mapping to dishes
+		if isempty $prev; then
+			newdata+=([$formated]=";$dish;")
+		else
+			newdata[$formated]="$prev$dish;"
+		fi
+	done
+}
+
+print() {
+	local length=${#sorted[@]}
+	for ((i = 0; i < $length; i += 1)); do
+		local wildcard=${sorted[i]}
+
+		if isdate $wildcard; then
+			local day=$(LC_TIME=$lang date --date "$wildcard" +'%a')
+			echo -e "\n${bold}${green}${day}${default}"
+
+		elif ! isempty $wildcard; then
+			is_it_ingredient $1 $2
+
+			if ! isempty $index; then
+				printdish
+			else
+				echo $wildcard
+			fi
+		fi
+	done
+	echo ""
+}
+
+#return index of ingredients
+is_it_ingredient() {
+	ingredient="köttbullar"
+	if equals $1 en; then
+		ingredient="meatballs"
+	fi
+
+	if ! isdigit $2 || ! isempty $2; then
+		ingredient=$2
+	fi
+
+	local param="\"\\\b$ingredient\\\b\"; \"i\""
+	index=$(echo \"$wildcard\" | jq "match($param).offset")
+}
+
+printdish() {
+	local dishend=$(echo $ingredient | jq -R "length")
+	local end=$(($index + $dishend))
+
+	local head="${wildcard:0:$index}"
+	local body="${blink}${bold}${orange}${wildcard:$index:$dishend}"
+	local tail="${default}${wildcard:$end}"
+
+	echo -e "${head}${body}${tail}"
 }
 
 style() {
@@ -149,8 +179,8 @@ isnegative() {
 	[ $1 -lt 0 ]
 }
 
-isvalid() {
-	[ "$1" != "null" ] && [ "$2" != "null" ]
+isdate() {
+	[[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && date -d "$1" >/dev/null
 }
 
-lunch $1 $2
+lunch $1 $2 $3
