@@ -2,7 +2,7 @@
 
 #expressen menu
 #$1: <#days from today>
-#$2: <language> (en for English, default is Swedish)
+#$2: <language> (en for English, DEFAULT is Swedish)
 lunch() {
 	#number of days from today
 	local ndays=0
@@ -64,13 +64,17 @@ expressen_data() {
 		arg=1
 	fi
 
-	rawdata=$(curl -s $url | jq -r '.[] | .startDate, .displayNames['$arg'].dishDisplayName')
+	rawdata=$(
+		curl -s $url | jq -r '.[] | 
+		.startDate, .displayNames['$arg'].dishDisplayName'
+	)
 }
 
 #expressen api
 expressen_url() {
 	local hostname='http://carbonateapiprod.azurewebsites.net/'
-	local api='api/v1/mealprovidingunits/3d519481-1667-4cad-d2a3-08d558129279/dishoccurrences'
+	local key='3d519481-1667-4cad-d2a3-08d558129279'
+	local api='api/v1/mealprovidingunits/'$key'/dishoccurrences'
 	echo ''$hostname''$api'?startDate='$today'&endDate='$todate''
 }
 
@@ -84,7 +88,7 @@ toarray() {
 	#store data in array
 	read -r -a data -d '' <<<"$rawdata"
 
-	#reset back to default value
+	#reset back to DEFAULT value
 	unset IFS
 }
 
@@ -114,7 +118,7 @@ print() {
 
 		if isdate $wildcard; then
 			local day=$(LC_TIME=$lang date --date "$wildcard" +'%a')
-			echo -e "\n${bold}${green}${day}${default}"
+			echo -e "\n${BOLD}${GREEN}${day}${DEFAULT}"
 
 		elif ! isempty $wildcard; then
 			is_it_ingredient $1 $2
@@ -149,38 +153,28 @@ printdish() {
 	local end=$(($index + $dishend))
 
 	local head="${wildcard:0:$index}"
-	local body="${blink}${bold}${orange}${wildcard:$index:$dishend}"
-	local tail="${default}${wildcard:$end}"
+	local body="${BLINK}${wildcard:$index:$dishend}"
+	local tail="${DEFAULT}${wildcard:$end}"
 
 	echo -e "${head}${body}${tail}"
 }
 
 style() {
-	default='\e[0m'
-	bold='\e[1m'
-	blink='\e[39m\e[5m'
-	green='\e[32m'
-	orange='\e[38;5;208m'
+	DEFAULT='\e[0m'
+	BOLD='\e[1m'
+	BLINK='\e[39m\e[5m'
+	GREEN='\e[32m'
 }
 
-equals() {
-	[ "$1" == "$2" ]
-}
+equals() { [ "$1" == "$2" ]; }
 
-isempty() {
-	[ -z "$1" ]
-}
+isempty() { [ -z "$1" ]; }
 
-isdigit() {
-	[[ "$1" =~ ^[0-9]*$ ]]
-}
+isdigit() { [[ "$1" =~ ^[0-9]*$ ]]; }
 
-isnegative() {
-	[ $1 -lt 0 ]
-}
+isnegative() { [ $1 -lt 0 ]; }
 
-isdate() {
-	[[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && date -d "$1" >/dev/null
-}
+isdate() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] &&
+	date -d "$1" >/dev/null; }
 
 lunch $1 $2 $3
