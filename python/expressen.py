@@ -163,7 +163,8 @@ def print_date(date):
 
 def print_element(dish):
     ingredient = "köttbullar".decode("utf-8")
-    ans = re.search(r'\b' + re.escape(ingredient) + r'\b', dish, re.IGNORECASE)
+    ans = re.search(r'\b' + re.escape(ingredient)
+                    + r'\b', dish, re.IGNORECASE)
 
     index = find_index(ans)
     if index != -1:
@@ -186,7 +187,7 @@ def print_match(dish, ingredient, index):
 def print_restaurant(menu, restaurant):
     print style.BLUE + restaurants[restaurant][0] + style.DEFAULT
     if not menu:
-        print "· Ingen meny".decode("utf-8")
+        print "· ".decode("utf-8") + style.DIM + "Ingen meny" + style.DEFAULT
 
 
 def set_locale(code):
