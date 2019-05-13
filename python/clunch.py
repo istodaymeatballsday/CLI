@@ -65,19 +65,25 @@ def get_pripps_data(api, num_of_days):
             for table in description:
                 for tr in table:
                     for td in tr:
+                        dish = tr.findall("td")[1].text
 
-                        if if_date_in_range(date, start_date, end_date):
-                            dish = td.text.strip()
-                            wildcard = td.find("b")
+                        for b in td:
+                            dish_type = b.text
 
-                            if wildcard != None:  # bad xml
-                                type_of_dish = wildcard.text
-
-                            if dish != "":  # bad xml
-                                data.append(date)
-                                data.append(dish + style.DIM +
-                                            " (" + type_of_dish + ")" + style.DEFAULT)
+                            if date_in_range(date,
+                                             start_date,
+                                             end_date):
+                                append_data(data,
+                                            date,
+                                            dish,
+                                            dish_type)
     return data
+
+
+def append_data(data, date, dish, dish_type):
+    data.append(date)
+    data.append(dish + style.DIM +
+                " (" + dish_type + ")" + style.DEFAULT)
 
 
 def parse_xml(api):
@@ -85,7 +91,7 @@ def parse_xml(api):
     return root.findall('channel/item')
 
 
-def if_date_in_range(date, start_date, end_date):
+def date_in_range(date, start_date, end_date):
     return start_date <= date <= end_date
 
 
@@ -105,6 +111,10 @@ def map_data(menus, data, restaurant, num_of_restaurants):
 
 
 def print_data(menus):
+    if not menus:
+        print "Ingen data"
+        quit()
+
     for key in sorted(menus):
         print
         print_date(key)
@@ -170,7 +180,7 @@ def print_element(dish):
     if index != -1:
         print_match(dish, ingredient, index)
     else:
-        print "· ".decode("utf-8") + dish
+        print style.DOT + dish
 
 
 def print_match(dish, ingredient, index):
@@ -180,14 +190,14 @@ def print_match(dish, ingredient, index):
     body = dish[index:length]
     tail = dish[length:]
 
-    print "· ".decode("utf-8") + head + style.BLINK + \
+    print style.DOT + head + style.BLINK + \
         body + style.DEFAULT + tail
 
 
 def print_restaurant(menu, restaurant):
     print style.BLUE + restaurants[restaurant][0] + style.DEFAULT
     if not menu:
-        print "· ".decode("utf-8") + style.DIM + "Ingen meny" + style.DEFAULT
+        print style.DOT + style.DIM + "Ingen meny" + style.DEFAULT
 
 
 def set_locale(code):
@@ -201,6 +211,7 @@ class style():
     BOLD = "\033[1m"
     BLINK = '\33[5m'
     DIM = '\033[2m'
+    DOT = "· ".decode("utf-8")
 
 
 lunch()

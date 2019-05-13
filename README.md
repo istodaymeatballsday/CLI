@@ -17,14 +17,14 @@ $ curl "https://raw.githubusercontent.com/istodaymeatballsday/CLI/master/install
 
 ## How to run
 ```
-$ express
+$ clunch
 ```
 
 - `$1`
   -  *optional* 
   -  number of days from today, default is today's menus
-     -  input `0-9`
+  -  input `0-9`
 
 
 ## [Linux](resources/README.md)
-Open link for instructions on how to run bash script [*expressen.sh*](bash/expressen.sh)
+Open link for instructions on how to run bash script [*expressen.sh*](expressen.sh)
