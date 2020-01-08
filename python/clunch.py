@@ -34,7 +34,7 @@ def main():
 def get_menus(queue):
     menus = {}
     for i in range(queue.qsize()):
-        thread = Thread(target=get_data_thread,
+        thread = Thread(target=get_menus_thread,
                         args=(queue, menus))
         thread.daemon = True
         thread.start()
@@ -52,28 +52,25 @@ def build_queue(restaurants, num_of_days, num_of_restaurants):
     return queue
 
 
-def get_data_thread(queue, menus):
+def get_menus_thread(queue, menus):
     while not queue.empty():
         q = queue.get()
+        res = get_menu(q[1], q[0])
 
         if q[1] == 4:
-            menu = get_pripps_data(q[1], q[0])
+            menu = parse_pripps_menu(res, q[0])
         else:
-            menu = get_data(q[1], q[0])
+            menu = parse_menu(res)
 
         map_data(menus, menu, q[1], q[2])
         queue.task_done()
 
 
-def get_data(restaurant, num_of_days):
-    start_date, end_date = get_dates(num_of_days)
-    url = api.API_URL(
-        restaurants[restaurant][1],
-        start_date,
-        end_date)
+def get_menu(restaurant, num_of_days):
+    url = get_url(restaurant, num_of_days)
 
     try:
-        res = urllib2.urlopen(url).read()
+        return urllib2.urlopen(url).read()
 
     except urllib2.HTTPError as e:
         print "HTTPError: {}, {}".format(e.code, e.reason)
@@ -84,6 +81,20 @@ def get_data(restaurant, num_of_days):
     except Exception as e:
         print "Exception: {}".format(e)
 
+
+def get_url(restaurant, num_of_days):
+    if restaurant == 4:
+        return restaurants[4][1]
+    else:
+        start_date, end_date = get_dates(num_of_days)
+
+        return api.API_URL(
+            restaurants[restaurant][1],
+            start_date,
+            end_date)
+
+
+def parse_menu(res):
     rawdata = json.loads(res)
     data = []
     for i in rawdata:
@@ -93,9 +104,9 @@ def get_data(restaurant, num_of_days):
     return data
 
 
-def get_pripps_data(restaurant, num_of_days):
+def parse_pripps_menu(menu, num_of_days):
+    item = parse_xml(menu)
     data = []
-    item = parse_xml(restaurant)
     start_date, end_date = get_dates(num_of_days)
 
     for title in item:
@@ -120,17 +131,16 @@ def get_pripps_data(restaurant, num_of_days):
     return data
 
 
+def parse_xml(res):
+    root = ET.fromstring(res)
+
+    return root.findall('channel/item')
+
+
 def append_data(data, date, dish, dish_type):
     data.append(date)
     data.append(dish + style.DIM +
                 " (" + dish_type + ")" + style.DEFAULT)
-
-
-def parse_xml(restaurant):
-    root = ET.fromstring(
-        urllib2.urlopen(restaurants[restaurant][1]).read())
-
-    return root.findall('channel/item')
 
 
 def date_in_range(date, start_date, end_date):
