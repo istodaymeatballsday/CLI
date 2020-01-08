@@ -3,6 +3,8 @@
 
 from datetime import datetime
 from datetime import timedelta
+from threading import Thread
+from Queue import Queue
 import xml.etree.ElementTree as ET
 import locale
 import urllib2
@@ -14,37 +16,75 @@ restaurants = [["Expressen", '3d519481-1667-4cad-d2a3'],
                ["Kårrestaurangen", '21f31565-5c2b-4b47-d2a1'],
                ["Linsen", 'b672efaf-032a-4bb8-d2a5'],
                ["S.M.A.K", '3ac68e11-bcee-425e-d2a8'],
-               ["J.A. Pripps", 'http://intern.chalmerskonferens.se/view/'
-                'restaurant/j-a-pripps-pub-cafe/RSS%20Feed.rss']]
+               ["J.A. Pripps", 'http://intern.chalmerskonferens.se/'
+                'view/restaurant/j-a-pripps-pub-cafe/RSS%20Feed.rss']]
 
 
-def lunch():
+def main():
     set_locale("sv_SE.utf-8")
-    num_of_restaurants = 5
+    num_of_restaurants = len(restaurants)
     num_of_days = get_param()
-    menus = {}
 
-    for restaurant in range(num_of_restaurants - 1):
-        menu = get_data(restaurant, num_of_days)
-        map_data(menus, menu, restaurant, num_of_restaurants)
-
-    pripps_menu = get_pripps_data(4, num_of_days)
-    map_data(menus, pripps_menu, 4, num_of_restaurants)
+    queue = build_queue(restaurants, num_of_days, num_of_restaurants)
+    menus = get_menus(queue)
 
     print_data(menus)
 
 
-def get_data(api, num_of_days):
+def get_menus(queue):
+    menus = {}
+    for i in range(queue.qsize()):
+        thread = Thread(target=get_data_thread,
+                        args=(queue, menus))
+        thread.daemon = True
+        thread.start()
+
+    queue.join()
+
+    return menus
+
+
+def build_queue(restaurants, num_of_days, num_of_restaurants):
+    queue = Queue()
+    for restaurant in range(num_of_restaurants):
+        queue.put((num_of_days, restaurant, num_of_restaurants))
+
+    return queue
+
+
+def get_data_thread(queue, menus):
+    while not queue.empty():
+        q = queue.get()
+
+        if q[1] == 4:
+            menu = get_pripps_data(q[1], q[0])
+        else:
+            menu = get_data(q[1], q[0])
+
+        map_data(menus, menu, q[1], q[2])
+        queue.task_done()
+
+
+def get_data(restaurant, num_of_days):
     start_date, end_date = get_dates(num_of_days)
+    url = api.API_URL(
+        restaurants[restaurant][1],
+        start_date,
+        end_date)
 
-    rawdata = json.loads(urllib2.urlopen(
-        'http://carbonateapiprod.azurewebsites.net/'
-        'api/v1/mealprovidingunits/' +
-        restaurants[api][1] + '-08d558129279/dishoccurrences?'
-        'startDate=' + start_date +
-        '&endDate=' + end_date
-    ).read())
+    try:
+        res = urllib2.urlopen(url).read()
 
+    except urllib2.HTTPError as e:
+        print "HTTPError: {}, {}".format(e.code, e.reason)
+
+    except urllib2.HTTPException as e:
+        print "HTTPException: {}".format(e)
+
+    except Exception as e:
+        print "Exception: {}".format(e)
+
+    rawdata = json.loads(res)
     data = []
     for i in rawdata:
         data.append(format_date(i['startDate']))
@@ -53,9 +93,9 @@ def get_data(api, num_of_days):
     return data
 
 
-def get_pripps_data(api, num_of_days):
+def get_pripps_data(restaurant, num_of_days):
     data = []
-    item = parse_xml(api)
+    item = parse_xml(restaurant)
     start_date, end_date = get_dates(num_of_days)
 
     for title in item:
@@ -86,8 +126,10 @@ def append_data(data, date, dish, dish_type):
                 " (" + dish_type + ")" + style.DEFAULT)
 
 
-def parse_xml(api):
-    root = ET.fromstring(urllib2.urlopen(restaurants[api][1]).read())
+def parse_xml(restaurant):
+    root = ET.fromstring(
+        urllib2.urlopen(restaurants[restaurant][1]).read())
+
     return root.findall('channel/item')
 
 
@@ -204,7 +246,20 @@ def set_locale(code):
     locale.setlocale(locale.LC_ALL, code)
 
 
-class style():
+class api:
+    BASE_URL = \
+        'http://carbonateapiprod.azurewebsites.net/' \
+        'api/v1/mealprovidingunits/'
+
+    @staticmethod
+    def API_URL(restaurant, start_date, end_date):
+        return api.BASE_URL + restaurant + \
+            '-08d558129279/dishoccurrences?' \
+            'startDate=' + start_date + \
+            '&endDate=' + end_date
+
+
+class style:
     DEFAULT = '\033[0m'
     GREEN = '\033[92m'
     BLUE = '\033[94m'
@@ -214,4 +269,5 @@ class style():
     DOT = "· ".decode("utf-8")
 
 
-lunch()
+if __name__ == "__main__":
+    main()
