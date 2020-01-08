@@ -8,6 +8,7 @@ from Queue import Queue
 import xml.etree.ElementTree as ET
 import locale
 import urllib2
+import httplib
 import json
 import sys
 import re
@@ -22,17 +23,14 @@ restaurants = [["Expressen", '3d519481-1667-4cad-d2a3'],
 
 def main():
     set_locale("sv_SE.utf-8")
-    num_of_restaurants = len(restaurants)
-    num_of_days = get_param()
-
-    queue = build_queue(restaurants, num_of_days, num_of_restaurants)
-    menus = get_menus(queue)
-
+    menus = get_menus()
     print_data(menus)
 
 
-def get_menus(queue):
+def get_menus():
+    queue = build_queue()
     menus = {}
+
     for i in range(queue.qsize()):
         thread = Thread(target=get_menus_thread,
                         args=(queue, menus))
@@ -44,10 +42,13 @@ def get_menus(queue):
     return menus
 
 
-def build_queue(restaurants, num_of_days, num_of_restaurants):
+def build_queue():
     queue = Queue()
+    num_of_restaurants = len(restaurants)
+    num_of_days = get_param()
+
     for restaurant in range(num_of_restaurants):
-        queue.put((num_of_days, restaurant, num_of_restaurants))
+        queue.put((num_of_days, restaurant))
 
     return queue
 
@@ -56,13 +57,14 @@ def get_menus_thread(queue, menus):
     while not queue.empty():
         q = queue.get()
         res = get_menu(q[1], q[0])
+        r = restaurants[q[1]][0]
 
-        if q[1] == 4:
+        if r == "J.A. Pripps":
             menu = parse_pripps_menu(res, q[0])
         else:
             menu = parse_menu(res)
 
-        map_data(menus, menu, q[1], q[2])
+        map_data(menus, menu, q[1])
         queue.task_done()
 
 
@@ -73,9 +75,12 @@ def get_menu(restaurant, num_of_days):
         return urllib2.urlopen(url).read()
 
     except urllib2.HTTPError as e:
-        print "HTTPError: {}, {}".format(e.code, e.reason)
+        print "HTTPError: {}, {}".format(e.code)
 
-    except urllib2.HTTPException as e:
+    except urllib2.URLError, e:
+        print "URLError: {}".format(e.reason)
+
+    except httplib.HTTPException, e:
         print "HTTPException: {}".format(e)
 
     except Exception as e:
@@ -83,8 +88,10 @@ def get_menu(restaurant, num_of_days):
 
 
 def get_url(restaurant, num_of_days):
-    if restaurant == 4:
-        return restaurants[4][1]
+    r = restaurants[restaurant][0]
+
+    if r == "J.A. Pripps":
+        return restaurants[restaurant][1]
     else:
         start_date, end_date = get_dates(num_of_days)
 
@@ -147,8 +154,10 @@ def date_in_range(date, start_date, end_date):
     return start_date <= date <= end_date
 
 
-def map_data(menus, data, restaurant, num_of_restaurants):
+def map_data(menus, data, restaurant):
+    num_of_restaurants = len(restaurants)
     length = len(data)
+    
     for i in range(0, length, 2):
 
         date = data[i]
