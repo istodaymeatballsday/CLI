@@ -6,7 +6,7 @@ Outputs Chalmers *Johanneberg*
 - S.M.A.K
 - J.A. Pripps
   
-lunch menu in terminal & highlights *Köttbullar*
+lunch menu in terminal & highlights *Köttbullar* or *Meatballs*
 
 <img src="resources/gif-py.gif" width="640">
 
@@ -17,12 +17,12 @@ $ curl "https://raw.githubusercontent.com/istodaymeatballsday/CLI/master/install
 
 ## How to run
 ```
-$ clunch
+$ clunch $1
 ```
 
 - `$1`
   -  *optional* 
-  -  number of days from today, default is today's menus
+  -  number of days (default is today's menus)
   -  input `0-9`
 
 
