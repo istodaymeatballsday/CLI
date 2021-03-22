@@ -17,8 +17,10 @@ PY_VERSION = sys.version_info[0]
 
 if PY_VERSION < 3:
     from Queue import Queue
+    import urllib2
 elif PY_VERSION >= 3:
     from queue import Queue
+    import urllib.request
 
 
 RESTAURANTS = [["Expressen", '3d519481-1667-4cad-d2a3'],
@@ -37,8 +39,8 @@ def main():
     except Exception:
         num_of_days = 0
 
-    info = Style.style("[INFO]", "green", [])
-    print(info, "Fetching data...")
+    info = Style.style("[INFO]", "green")
+    print(info, "FETCHING DATA...")
 
     menus = get_menus(num_of_days)
     if not menus:
@@ -51,17 +53,14 @@ def main():
 def get_menus(num_of_days):
     menus = dict()
     queue = build_queue()
-    qsize = queue.qsize()
-    http = urllib3.PoolManager(maxsize=qsize)
 
-    for i in range(qsize):
+    for i in range(queue.qsize()):
         thread = Thread(target=get_menus_thread,
-                        args=(queue, http, menus, num_of_days))
+                        args=(queue, menus, num_of_days))
         thread.daemon = True
         thread.start()
 
     queue.join()
-    http.clear()
 
     return menus
 
@@ -76,11 +75,11 @@ def build_queue():
     return queue
 
 
-def get_menus_thread(queue, http, menus, num_of_days):
+def get_menus_thread(queue, menus, num_of_days):
     while not queue.empty():
         i = queue.get()
         restaurant = RESTAURANTS[i][0]
-        data = request_menu(i, http, num_of_days)
+        data = request_menu(i, num_of_days)
 
         if data is not None:
             if restaurant == 'J.A. Pripps':
@@ -145,26 +144,16 @@ def parse_data(menus, data, restaurant):
             menus[date] = disharr
 
 
-def request_menu(i, http, num_of_days):
+def request_menu(i, num_of_days):
     url = build_url(i, num_of_days)
     try:
-        res = http.request(
-            method='GET',
-            url=url,
-            preload_content=False,
-            retries=urllib3.Retry(10),
-            timeout=urllib3.Timeout(10))
-
-        status_code = res.status
-
-        if status_code == 200:
-            return res.read()
-        else:
-            print("HTTP status code: %s" % status_code)
-            print("URL: %s" % url)
-            return None
+        if PY_VERSION < 3:
+            return urllib2.urlopen(url, timeout=10).read()
+        elif PY_VERSION >= 3:
+            return urllib.request.urlopen(url, timeout=10).read().decode('utf-8')
     except Exception as e:
         print("Exception: %s" % e)
+        print("URL: %s" % url)
         return None
 
 
