@@ -7,6 +7,7 @@ from datetime import timedelta
 from threading import Thread
 import xml.etree.ElementTree as ET
 import xml.dom.minidom
+import urllib3
 import locale
 import json
 import sys
@@ -16,14 +17,8 @@ PY_VERSION = sys.version_info[0]
 
 if PY_VERSION < 3:
     from Queue import Queue
-    import urllib2
-    import httplib
 elif PY_VERSION >= 3:
     from queue import Queue
-    import http.client as httplib  # httplib.HTTPException
-    import urllib.error as urllib2  # urllib2.HTTPError
-    import urllib.request
-    import urllib.parse
 
 
 RESTAURANTS = [["Expressen", '3d519481-1667-4cad-d2a3'],
@@ -42,21 +37,31 @@ def main():
     except Exception:
         num_of_days = 0
 
+    info = Style.style("[INFO]", "green", [])
+    print(info, "Fetching data...")
+
     menus = get_menus(num_of_days)
+    if not menus:
+        print(info, 'INGEN DATA')
+        exit(1)
+
     print_data(menus)
 
 
 def get_menus(num_of_days):
     menus = dict()
     queue = build_queue()
+    qsize = queue.qsize()
+    http = urllib3.PoolManager(maxsize=qsize)
 
-    for i in range(queue.qsize()):
+    for i in range(qsize):
         thread = Thread(target=get_menus_thread,
-                        args=(queue, menus, num_of_days))
+                        args=(queue, http, menus, num_of_days))
         thread.daemon = True
         thread.start()
 
     queue.join()
+    http.clear()
 
     return menus
 
@@ -71,18 +76,20 @@ def build_queue():
     return queue
 
 
-def get_menus_thread(queue, menus, num_of_days):
+def get_menus_thread(queue, http, menus, num_of_days):
     while not queue.empty():
         i = queue.get()
-        data = request_menu(i, num_of_days)
         restaurant = RESTAURANTS[i][0]
+        data = request_menu(i, http, num_of_days)
 
-        if restaurant == 'J.A. Pripps':
-            menu = parse_pripps_menu(data, num_of_days)
-        else:
-            menu = parse_menu(data)
+        if data is not None:
+            if restaurant == 'J.A. Pripps':
+                menu = parse_pripps_menu(data, num_of_days)
+            else:
+                menu = parse_menu(data)
 
-        parse_data(menus, menu, i)
+            parse_data(menus, menu, i)
+
         queue.task_done()
 
 
@@ -138,26 +145,27 @@ def parse_data(menus, data, restaurant):
             menus[date] = disharr
 
 
-def request_menu(i, num_of_days):
+def request_menu(i, http, num_of_days):
     url = build_url(i, num_of_days)
-
     try:
-        if PY_VERSION < 3:
-            return urllib2.urlopen(url).read()
-        elif PY_VERSION >= 3:
-            return urllib.request.urlopen(url).read().decode('utf-8')
+        res = http.request(
+            method='GET',
+            url=url,
+            preload_content=False,
+            retries=urllib3.Retry(10),
+            timeout=urllib3.Timeout(10))
 
-    except urllib2.HTTPError as e:
-        print("HTTPError: {}\nURL: {}".format(e.code, url))
+        status_code = res.status
 
-    except urllib2.URLError as e:
-        print("URLError: {}\nURL: {}".format(e.reason, url))
-
-    except httplib.HTTPException as e:
-        print("HTTPException: {}\nURL: {}".format(e, url))
-
+        if status_code == 200:
+            return res.read()
+        else:
+            print("HTTP status code: %s" % status_code)
+            print("URL: %s" % url)
+            return None
     except Exception as e:
-        print("Exception: {}\nURL: {}".format(e, url))
+        print("Exception: %s" % e)
+        return None
 
 
 def build_url(i, num_of_days):
@@ -194,8 +202,8 @@ def append_data(menu, date, dish, dish_type):
 
 
 def find_match(dish):
-    ingredient = Utils.meatballs()
-    match = re.search(r'\b' + Utils.meatballs() + r'\b', dish, re.IGNORECASE)
+    match = re.search(
+        r'\b' + Utils.decode('(köttbullar|meatballs)') + r'\b', dish, re.IGNORECASE)
     try:
         index = match.start()
         _len = (index + len(match.group(0)))
@@ -219,14 +227,6 @@ class Api:
 
 class Utils:
     @staticmethod
-    def dot():
-        return Utils.decode('· ')
-
-    @staticmethod
-    def meatballs():
-        return '(' + re.escape(Utils.decode('köttbullar')) + '|' + re.escape('meatballs') + ')'
-
-    @staticmethod
     def decode(string):
         return string.decode("utf-8") if PY_VERSION < 3 else string
 
@@ -247,66 +247,54 @@ class Style:
     DIM = '\033[2m'
 
     @staticmethod
-    def dim(output):
-        return Style.DIM + output + Style.DEFAULT
+    def style(output, color, styles=[]):
+        if color is not None:
+            output = {
+                'green': Style.GREEN + '%s',
+                'blue': Style.BLUE + '%s',
+            }[color] % output
 
-    @staticmethod
-    def green(output):
-        return Style.GREEN + output + Style.DEFAULT
+        for style in styles:
+            output = {
+                'blink': Style.BLINK + '%s',
+                'bold': Style.BOLD + '%s',
+                'dim': Style.DIM + '%s'
+            }[style] % output
 
-    @staticmethod
-    def blue(output):
-        return Style.BLUE + output + Style.DEFAULT
-
-    @staticmethod
-    def blink(output):
-        return Style.BLINK + output + Style.DEFAULT
+        return output + Style.DEFAULT
 
 
 # -----------------------------------------------------------------
 # PRINT
 # -----------------------------------------------------------------
 def print_data(menus):
-    if not menus:
-        print('INGEN DATA')
-        quit()
-
-    for key in sorted(menus):
+    # print menu
+    for date in sorted(menus):
         print()
-        print_date(key)
-
-        for restaurant, menu in enumerate(menus[key]):
-            print_restaurant(menu, restaurant)
-
-            for dish in menu:
-                print_dish(dish)
+        day = datetime.strptime(date, Utils.format('Ymd')).strftime('%a')
+        print(Style.style(day, 'green', ['bold']))
+        # print restaurant
+        for restaurant, menu in enumerate(menus[date]):
+            print(Style.style(RESTAURANTS[restaurant][0], 'blue'))
+            if not menu:
+                print(Utils.decode('· ') +
+                      Style.style('INGEN MENY', None, ['dim']))
+            else:
+                # print dish
+                for dish in menu:
+                    index, _len = find_match(dish)
+                    # print dish
+                    if index is None:
+                        print(Utils.decode('· ') + dish)
+                    # print match
+                    else:
+                        head = dish[0:index]
+                        body = dish[index:_len]
+                        tail = dish[_len:]
+                        print(body)
+                        print(
+                            Utils.decode('· ') + head + Style.style(body, None, ['blink']) + tail)
     print()
-
-
-def print_date(date):
-    dt = datetime.strptime(date, Utils.format('Ymd')).strftime('%a')
-    print(Style.BOLD + Style.green(dt))
-
-
-def print_restaurant(menu, restaurant):
-    print(Style.blue(RESTAURANTS[restaurant][0]))
-    if not menu:
-        print(Utils.dot() + Style.dim('INGEN MENY'))
-
-
-def print_dish(dish):
-    index, _len = find_match(dish)
-    if index is not None:
-        print_match(dish, index, _len)
-    else:
-        print(Utils.dot() + dish)
-
-
-def print_match(dish, index, _len):
-    head = dish[0:index]
-    body = dish[index:_len]
-    tail = dish[_len:]
-    print(Utils.dot() + head + Style.blink(body) + tail)
 
 
 if __name__ == "__main__":
