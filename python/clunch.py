@@ -6,8 +6,6 @@ from datetime import datetime
 from datetime import timedelta
 from threading import Thread
 import xml.etree.ElementTree as ET
-import xml.dom.minidom
-import urllib3
 import locale
 import json
 import sys
@@ -20,7 +18,7 @@ if PY_VERSION < 3:
     import urllib2
 elif PY_VERSION >= 3:
     from queue import Queue
-    import urllib.request
+    import urllib.request as urllib2
 
 
 RESTAURANTS = [["Expressen", '3d519481-1667-4cad-d2a3'],
@@ -45,9 +43,8 @@ def main():
     menus = get_menus(num_of_days)
     if not menus:
         print(info, 'INGEN DATA')
-        exit(1)
-
-    print_data(menus)
+    else:
+        print_data(menus)
 
 
 def get_menus(num_of_days):
@@ -106,7 +103,7 @@ def parse_menu(data):
 def parse_pripps_menu(data, num_of_days):
     item = ET.fromstring(data).findall('channel/item')
     menu = []
-    start_date, end_date = get_dates(num_of_days)
+    start_date, end_date = get_date_range(num_of_days)
 
     for title in item:
         date = title.find("title").text[-10:]
@@ -146,11 +143,9 @@ def parse_data(menus, data, restaurant):
 
 def request_menu(i, num_of_days):
     url = build_url(i, num_of_days)
+
     try:
-        if PY_VERSION < 3:
-            return urllib2.urlopen(url, timeout=10).read()
-        elif PY_VERSION >= 3:
-            return urllib.request.urlopen(url, timeout=10).read().decode('utf-8')
+        return urllib2.urlopen(url, timeout=10).read()
     except Exception as e:
         print("Exception: %s" % e)
         print("URL: %s" % url)
@@ -163,15 +158,11 @@ def build_url(i, num_of_days):
     if restaurant == 'J.A. Pripps':
         return RESTAURANTS[i][1]
     else:
-        start_date, end_date = get_dates(num_of_days)
-
-        return Api.url(
-            RESTAURANTS[i][1],
-            start_date,
-            end_date)
+        start_date, end_date = get_date_range(num_of_days)
+        return Api.url(RESTAURANTS[i][1], start_date, end_date)
 
 
-def get_dates(num_of_days):
+def get_date_range(num_of_days):
     today = datetime.today()
     start_date = today.strftime(Utils.format('Ymd'))
     end_date = (
@@ -187,7 +178,7 @@ def format_date(date):
 
 def append_data(menu, date, dish, dish_type):
     menu.append(date)
-    menu.append(dish + Style.dim(" (" + dish_type + ")"))
+    menu.append(dish + Style.style(" (" + dish_type + ")", None, ['dim']))
 
 
 def find_match(dish):
@@ -258,6 +249,7 @@ class Style:
 # -----------------------------------------------------------------
 def print_data(menus):
     # print menu
+    dot = Utils.decode('· ')
     for date in sorted(menus):
         print()
         day = datetime.strptime(date, Utils.format('Ymd')).strftime('%a')
@@ -266,23 +258,21 @@ def print_data(menus):
         for restaurant, menu in enumerate(menus[date]):
             print(Style.style(RESTAURANTS[restaurant][0], 'blue'))
             if not menu:
-                print(Utils.decode('· ') +
-                      Style.style('INGEN MENY', None, ['dim']))
+                print(dot + Style.style('INGEN MENY', None, ['dim']))
             else:
                 # print dish
                 for dish in menu:
                     index, _len = find_match(dish)
                     # print dish
                     if index is None:
-                        print(Utils.decode('· ') + dish)
+                        print(dot + dish)
                     # print match
                     else:
                         head = dish[0:index]
                         body = dish[index:_len]
                         tail = dish[_len:]
-                        print(body)
                         print(
-                            Utils.decode('· ') + head + Style.style(body, None, ['blink']) + tail)
+                            dot + head + Style.style(body, None, ['blink']) + tail)
     print()
 
 
