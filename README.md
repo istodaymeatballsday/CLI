@@ -1,4 +1,5 @@
-## Description
+# Chalmers Lunch
+## [Python](python/)
 Outputs Chalmers *Johanneberg*
 - Expressen
 - Kårrestaurangen
@@ -25,6 +26,4 @@ $ clunch $1
   -  number of days (default is today's menus)
   -  input `0-9`
 
-
-## [Linux](resources/README.md)
-Open link for instructions on how to run bash script [*expressen.sh*](expressen.sh)
+## [Bash](/bash)
