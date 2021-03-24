@@ -1,112 +1,110 @@
 #!/bin/bash
 
-#expressen menu
-#$1: <#days from today>
-#$2: <language> (en for English, DEFAULT is Swedish)
-lunch() {
-	#number of days from today
-	local ndays=0
-
+expressen() {
+	#osx
+	if [[ "$OSTYPE" == "darwin"* ]]; then
+		JQ='jq-osx-amd64'
+	#linux
+	else
+		JQ='./jq-linux64'
+	fi
+	local num_of_days=0
 	#set language
-	local lang='sv_SE.utf-8'
 	if equals $2 en; then
 		lang='en_US.utf8'
+	else
+		lang='sv_SE.utf-8'
 	fi
 
-	if ! isempty $1; then
-		if ! isdigit $1 || isnegative $1; then
-			echo -e "\nInvalid input\n"
+	if ! is_empty $1; then
+		if ! is_digit $1 || is_negative $1; then
+			echo -e "\nINVALID INPUT\n"
 			return 0
 		fi
-		ndays=$1
+		num_of_days=$(($1 - 1))
 	fi
 
-	local today=$(date +'%Y-%m-%d')
-	local todate=$(date -d "$today+$ndays days" +'%Y-%m-%d')
-
+	local start_date=$(date +'%Y-%m-%d') # '2019-04-01' for testing
+	local end_date=$(date -d "$start_date+$num_of_days days" +'%Y-%m-%d')
 	#api url
-	local url=$(expressen_url)
+	local url=$(API)
+	#init colors etc.
+	DEFAULT='\e[0m'
+	BOLD='\e[1m'
+	BLINK='\e[39m\e[5m'
+	GREEN='\e[32m'
 
-	#get data
-	expressen_data $2
-	if isempty $rawdata; then
-		echo -e "\nNo data\n"
+	echo -e ${GREEN}${BOLD}'[INFO]'${DEFAULT}' FETCHING DATA...'
+
+	get_data $2
+	if is_empty $raw_data; then
+		echo -e "\nNO DATA\n"
 		return 0
 	fi
-
 	#store data in array
-	toarray
-
-	#map food to formatd dates in order to sort by date
-	declare -A local newdata
-	format
-
+	to_array
+	#map food to formatted dates in order to sort by date
+	declare -A local parsed_data
+	parse_data
 	#sort data because of shitty json
 	IFS=';'
 	read -r -a sorted -d '' <<<"$(
-		for key in "${!newdata[@]}"; do
-			printf "%s\n" "$key ${newdata[$key]}"
+		for key in "${!parsed_data[@]}"; do
+			printf "%s\n" "$key ${parsed_data[$key]}"
 		done | sort -k1
 	)"
 	unset IFS
-
-	#init colors etc.
-	style
-
 	#print data
 	print $2 $3
 }
 
-expressen_data() {
+get_data() {
 	#0 is Swedish menu
 	local arg=0
 	if equals $1 en; then
 		arg=1
 	fi
 
-	rawdata=$(
-		curl -s $url | jq -r '.[] | 
+	raw_data=$(
+		curl -s $url | $JQ -r '.[] | 
 		.startDate, .displayNames['$arg'].dishDisplayName'
 	)
 }
 
-#expressen api
-expressen_url() {
+#expressen API
+API() {
 	local hostname='http://carbonateapiprod.azurewebsites.net/'
 	local key='3d519481-1667-4cad-d2a3-08d558129279'
 	local api='api/v1/mealprovidingunits/'$key'/dishoccurrences'
-	echo ''$hostname''$api'?startDate='$today'&endDate='$todate''
+	echo ''$hostname''$api'?startDate='$start_date'&endDate='$end_date''
 }
 
 #date is stored as '4/23/2019 12:00:00 AM', which is a not valid format
 #+ makes it tricky to read data into array
-toarray() {
-	#IFS (internal field separator) variable is used to determine what characters
-	#+ bash defines as words boundaries when processing character strings.
+to_array() {
+	#IFS (Internal Field Separator), used to determine characters
 	IFS=$'\n'
-
 	#store data in array
-	read -r -a data -d '' <<<"$rawdata"
-
+	read -r -a data -d '' <<<"$raw_data"
 	#reset back to DEFAULT value
 	unset IFS
 }
 
-format() {
-	local -r dateformat='+%Y-%m-%d'
+parse_data() {
+	local -r date_format='+%Y-%m-%d'
 	local length=${#data[@]}
-	for ((i = 0; i < $length; i += 2)); do
 
+	for ((i = 0; i < $length; i += 2)); do
 		local date=${data[i]}
 		local dish=${data[$((i + 1))]}
-		local formated=$(date --date "$date" $dateformat)
-		local prev=${newdata[$formated]}
+		local fdate=$(date --date "$date" $date_format)
+		local prev=${parsed_data[$fdate]}
 
 		#store dates as keys mapping to dishes
-		if isempty $prev; then
-			newdata+=([$formated]=";$dish;")
+		if is_empty $prev; then
+			parsed_data+=([$fdate]=";$dish;")
 		else
-			newdata[$formated]="$prev$dish;"
+			parsed_data[$fdate]="$prev$dish;"
 		fi
 	done
 }
@@ -114,19 +112,19 @@ format() {
 print() {
 	local length=${#sorted[@]}
 	for ((i = 0; i < $length; i += 1)); do
-		local wildcard=${sorted[i]}
+		local param=${sorted[i]}
 
-		if isdate $wildcard; then
-			local day=$(LC_TIME=$lang date --date "$wildcard" +'%a')
+		if is_date $param; then
+			local day=$(LC_TIME=$lang date --date "$param" +'%a')
 			echo -e "\n${BOLD}${GREEN}${day}${DEFAULT}"
 
-		elif ! isempty $wildcard; then
-			is_it_ingredient $1 $2
+		elif ! is_empty $param; then
+			find_match $1 $2
 
-			if ! isempty $index; then
-				printdish
+			if ! is_empty $index; then
+				print_dish
 			else
-				echo $wildcard
+				echo $param
 			fi
 		fi
 	done
@@ -134,47 +132,51 @@ print() {
 }
 
 #return index of ingredients
-is_it_ingredient() {
-	ingredient="köttbullar"
-	if equals $1 en; then
-		ingredient="meatballs"
-	fi
-
-	if ! isdigit $2 || ! isempty $2; then
+find_match() {
+	if ! is_digit $2 || ! is_empty $2; then
 		ingredient=$2
+	else
+		if equals $1 en; then
+			ingredient="meatballs"
+		else
+			ingredient="köttbullar"
+		fi
 	fi
 
-	local param="\"\\\b$ingredient\\\b\"; \"i\""
-	index=$(echo \"$wildcard\" | jq "match($param).offset")
+	local match="\"\\\b$ingredient\\\b\"; \"i\""
+	index=$(echo \"$param\" | $JQ "match($match).offset")
 }
 
-printdish() {
-	local dishend=$(echo $ingredient | jq -R "length")
-	local end=$(($index + $dishend))
+print_dish() {
+	local end_dish=$(echo $ingredient | $JQ -R "length")
+	local end=$(($index + $end_dish))
 
-	local head="${wildcard:0:$index}"
-	local body="${BLINK}${wildcard:$index:$dishend}"
-	local tail="${DEFAULT}${wildcard:$end}"
+	local head="${param:0:$index}"
+	local body="${BLINK}${param:$index:$end_dish}"
+	local tail="${DEFAULT}${param:$end}"
 
 	echo -e "${head}${body}${tail}"
 }
 
-style() {
-	DEFAULT='\e[0m'
-	BOLD='\e[1m'
-	BLINK='\e[39m\e[5m'
-	GREEN='\e[32m'
+equals() {
+	[ "$1" == "$2" ]
 }
 
-equals() { [ "$1" == "$2" ]; }
+is_empty() {
+	[ -z "$1" ]
+}
 
-isempty() { [ -z "$1" ]; }
+is_digit() {
+	[[ "$1" =~ ^[0-9]*$ ]]
+}
 
-isdigit() { [[ "$1" =~ ^[0-9]*$ ]]; }
+is_negative() {
+	[ $1 -lt 0 ]
+}
 
-isnegative() { [ $1 -lt 0 ]; }
+is_date() {
+	[[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] &&
+		date -d "$1" >/dev/null
+}
 
-isdate() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] &&
-	date -d "$1" >/dev/null; }
-
-lunch $1 $2 $3
+expressen $1 $2 $3
