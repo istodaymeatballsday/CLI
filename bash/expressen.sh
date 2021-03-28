@@ -1,13 +1,15 @@
 #!/bin/bash
 
 expressen() {
+	dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 	#osx
 	if [[ "$OSTYPE" == "darwin"* ]]; then
-		JQ='jq-osx-amd64'
+		JQ="$dir/jq-osx-amd64"
 	#linux
 	else
-		JQ='./jq-linux64'
+		JQ="$dir/jq-linux64"
 	fi
+
 	local num_of_days=0
 	#set language
 	if equals $2 en; then
@@ -24,7 +26,8 @@ expressen() {
 		num_of_days=$(($1 - 1))
 	fi
 
-	local start_date=$(date +'%Y-%m-%d') # '2019-04-01' for testing
+	# local start_date='2019-04-01' # For testing
+	local start_date=$(date +'%Y-%m-%d')
 	local end_date=$(date -d "$start_date+$num_of_days days" +'%Y-%m-%d')
 	#api url
 	local url=$(API)
